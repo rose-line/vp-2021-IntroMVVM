@@ -131,7 +131,7 @@ Cette classe dérive de `Base` : les « abonnés » aux événements de ch
 ```csharp
 public class ContactsDbContext : DbContext
 {
-  public ContactsDbContext() : base(name="IntroMVVM")
+  public ContactsDbContext() : base("name=IntroMVVM")
   {
   }
 
@@ -271,7 +271,7 @@ On va cependant la refactorer pour implémenter le pattern MVVM qui va permettre
 /// <summary>
 /// Classe de base pour tous les View Models
 /// </summary>
-public class ViewModelBase : CommonBase
+public class ViewModelBase : Base
 {
 }
 ```
