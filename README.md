@@ -343,6 +343,14 @@ N'importe quel *Control* ou fenêtre WPF peut créer, en XAML, des instances de 
 
 On va utiliser la hiérarchie parent-enfant inhérente à XAML pour le data binding. Une pratique commune est de créer un View Model pour le lier à un User Control ou à une fenêtre WPF. On a donc « une View = un View Model ». Ensuite, dans la vue, on lie les Controls à des propriétés du View Model.
 
+- Définir la ressource statique qui va instancier le View Model avec la clé `vmContacts` :
+
+```xml
+<UserControl.Resources>
+  <vm:ContactsViewModel x:Key="vmContacts" />
+</UserControl.Resources>
+```
+
 - Juste pour illustrer la transmission du contexte dans la hiérarchie XAML, encapsulez la `ListView` de `ListControl` dans une `Grid`, et appliquez un *contexte* à cette Grid, en utilisant la ressource statique précédemment définie :
 
 ```xml
