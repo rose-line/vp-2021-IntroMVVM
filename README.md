@@ -170,7 +170,7 @@ protected override void OnStartup(StartupEventArgs e)
 
 ### Control indépendant pour la liste
 
-- Ajoutez un item *User Control* : `Controls\ListControl.cs`
+- Ajoutez un item de type *User Control* nommé `ListControl` dans le répertoire `Controls`
 - Il contiendra une *ListView* :
 
 ```xml
