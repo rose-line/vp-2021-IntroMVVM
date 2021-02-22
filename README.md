@@ -317,7 +317,7 @@ public class ViewModelBase : Base
 
 ### MVVM pour charger les contacts
 
-Le code de chargement des contacts va être déplacé dans un View Model.
+Le code de chargement des contacts va être déplacé dans le View Model qui va être associé à la View (XAML).
 
 - Ajoutez une classe `ViewModels\ContactsViewModel.cs`
 
@@ -340,12 +340,24 @@ public class ContactsViewModel : ViewModelBase
       RaisePropertyChanged("Contacts");
     }
   }
+  
   public virtual void ChargerContacts()
   {
     ContactsDbContext db;
+
+    // Récupération de la Connection String depuis App.config
+    string connString = ConfigurationManager.ConnectionStrings["Contacts"].ConnectionString;
+
+    // Création des options de connexion pour Entity Framework
+    var optionsBuilder = new DbContextOptionsBuilder<ContactsDbContext>();
+    optionsBuilder.UseSqlServer(connString);
+
     try
     {
-      db = new ContactsDbContext();
+      // Connexion à la DB
+      db = new ContactsDbContext(optionsBuilder.Options);
+
+      // Récupération des contacts et initialisation de la liste observable
       Contacts = new ObservableCollection<Contact>(db.Contacts);
     }
     catch (Exception ex)
@@ -356,7 +368,7 @@ public class ContactsViewModel : ViewModelBase
 }
 ```
 
-- Supprimez les méthodes devenues superflues dans `Controls\ListControl.cs`
+- Supprimez les méthodes devenues superflues dans le *code-behind* `Controls\ListControl.xaml.cs`
 
 La classe `ObservableCollection` est très utilisée dans le pattern : elle lance automatiquement des notifications quand des éléments sont ajoutés ou supprimés de la collection, ou que toute la collection est actualisée. Les éléments WPF qui y sont liés sont alors immédiatement notifiés.
 
