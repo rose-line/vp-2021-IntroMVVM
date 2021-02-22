@@ -15,7 +15,7 @@ Cette première partie sera très propre mais n'utilisera pas le pattern MVVM.
 
 ### `INotifyPropertyChanged`
 
-- Créez un nouveau projet WPF (.Net Framework 4.7+)
+- Créez un nouveau projet WPF (.NET Framework 5)
 - Créez une classe `Common\Base.cs` (conservez le namespace proposé et ajoutez les importations nécessaires)
 
 ```csharp
@@ -49,14 +49,14 @@ public class Base : INotifyPropertyChanged
 }
 ```
 
-Cette classe servira de base à toute classe qui voudra « publier » certains types d'événements (« cette donnée (propriété d'un objet) a été modifiée, les entités concernées par cette modif pourront agir en conséquence »). C'est le but de l'interface `INotifyPropertyChanged` ici implémentée.
+Cette classe servira de base à toute classe qui voudra « publier » certains types d'événements (c'est le but de l'interface `INotifyPropertyChanged` ici implémentée), du genre : « cette donnée a été modifiée, les entités concernées par cette modif pourront agir en conséquence ». Typiquement, l'action sera une mise à jour de l'UI, *bindée* (liée) à cette « donnée », qui sera en fait représentée par une **propriété C#** (rappel : sorte de variable exposée dans une classe avec getter/setter, dont on voit des exemples dans la section suivnte).
 
 ### BDD locale
 
 - Créez un répertoire `BDD`
 - Y créer un item de type `Service-based Database` (fichier `IntroMVVM.mdf`)
 - Ouvrez le fichier mdf créé et, dans le Server Explorer, ouvrez une fenêtre de requête sur les tables
-- Exécutez la requête de création d'une table `[dbo].[Contact]` avec id (clé primaire), nom, email, tel
+- Exécutez la requête T-SQL de création d'une table `[dbo].[Contact]` avec id (clé primaire auto-incrémentée), nom, email, tel
 - Ajoutez quelques enregistrements à cette table (par requêtes ou en utilisant l'interface : `Show Table Data`)
 
 ### Entity Framework
@@ -122,16 +122,21 @@ public class Contact : Base
 }
 ```
 
-Cette classe dérive de `Base` : les « abonnés » aux événements de changement de propriétés seront notifiés.
+Cette classe dérive de `Base`, dont on utilise `RaisePropertyChanged` : chaque propriété, quand elle est *set*, fait deux choses :
+- l'affectation classique : `tel = value);` (rappel : `value` est la variable définie automatiquement dans un setter d'une propriété C# qui contient la nouvelle valeur) ;
+- un appel à `RaisePropertyChanged` : on lance l'événement qui va avertir les abonnés éventuels que cette propriété a été modifiée. C'est la base du *binding* WPF, et du pattern MVVM.
 
 ### DbContext
 
+On va s'occuper du `DbContext`, l'entité gérée par Entity Framework qui permet de faire le lien avec la couche données.
+
 - Créez la classe `Models\ContactsDbContext.cs`
+- Le nom passée au constructeur de la classe parente (appel à `base`) devra correspondre au nom de la future base de données construite, ici `IntroMVVM` ; prenez soin de respecter la casse quand vous définissez ces noms dans vos applis (comme c'est défini ici dans une String, le compilateur ne va pas vérifier si la DB existe)
 
 ```csharp
 public class ContactsDbContext : DbContext
 {
-  public ContactsDbContext() : base("name=IntroMVVM")
+  public ContactsDbContext(DbContextOptions options) : base(options)
   {
   }
 
@@ -139,39 +144,51 @@ public class ContactsDbContext : DbContext
 }
 ```
 
+- Notez la syntaxe de la propriété `Contacts` : getter/setter classique fournis sans code (générés automatiquement par C#)
+
 ### Connection String
 
 - Ajoutez la Connection String dans le fichier de configuration `App.config`
+- De nouveau, attention aux noms et à la casse
 
 ```xml
 <connectionStrings>
-    <add name="IntroMVVM"
-         connectionString="Server=(localdb)\MSSQLLocalDB;AttachDbFilename=|DataDirectory|IntroMVVM.mdf;Database=IntroMVVM;Trusted_Connection=Yes;"
-         providerName="System.Data.SqlClient" />
-  </connectionStrings>
+  <add name="Contacts"
+  connectionString="Server=(localdb)\MSSQLLocalDB;AttachDbFilename=|DataDirectory|Contacts.mdf;Database=Contacts;Trusted_Connection=Yes;"
+  providerName="System.Data.SqlClient" />
+</connectionStrings>
 ```
 
-### Data Directory
+- Notez le `DataDirectory` entouré de caractèrees *pipes* : cela indique qu'il faut remplacer cette partie par une donnée fournie dans le code, qu'on va rendre disponible par les données du domaine de l'application (c'est une façon d'injecter des variables à des fichiers de configuration qui sont normalement complètement statiques)
 
-Il faut préciser ce que signifie `DataDirectory` dans la ConnectionString précédente (en l'occurrence le répertoire `BDD`). C'est une propriété de domaine qui illustre comment paramétrer, depuis l'application, un fichier de configuration. Elle est initialisée quand l'application démarre, dans le fichier `App.xaml.cs`, depuis la méthode `OnStartup`.
+### DataDirectory
+
+Ce `DataDirectory` dans la *ConnectionString* précédente (en l'occurrence le répertoire `BDD`) sera donc une propriété de domaine qui illustre comment paramétrer, depuis l'application, un fichier de configuration. Elle est initialisée quand l'application démarre, dans le fichier `App.xaml.cs`, depuis la méthode `OnStartup` :
 
 ```csharp
 protected override void OnStartup(StartupEventArgs e)
 {
   base.OnStartup(e);
 
-  // DataDirectory pour Entity Framework
+  // Le chemin construit ici va être plus tard injecté dans la Connection String à la place de |DataDirectory|
+  // 
   string path = Environment.CurrentDirectory;
-  path = path.Replace(@"\bin\Debug", "");
+  path = path.Replace(@"\bin\Debug\net5.0-windows", "");
   path += @"\BDD\";
   AppDomain.CurrentDomain.SetData("DataDirectory", path);
 }
 ```
 
+- On va donc chercher le répertoire courant, auquel on retire le préfixe `\bin\debug` (en ajoutant `\net5.0-windows` si on est sur un projet .NET 5) pour « remonter » dans le répertoire principal du projet, puis on y ajoute `BDD` (c'est là que se trouve notre base de données MDF)
+
 ### Control indépendant pour la liste
 
 - Ajoutez un item de type *User Control* nommé `ListControl` dans le répertoire `Controls`
-- Il contiendra une *ListView* :
+- Le principe, dans une application classique avec une bonne expérience utilisateur, va être de :
+  - définir un *User Control* pour chaque « écran » proposé à l'utilisateur
+  - venir afficher le bon *User Control* dans la fenêtre principale en fonction des actions de l'utilisateur
+- Notre appli ne contiendra que le *User Control* nouvellement créé
+- Celui-ci contient une *ListView* (Control permettant d'afficher des donnée en mode liste, éventuellement en tableau mais par nécessairement) :
 
 ```xml
 <ListView Name="lvContacts" ItemsSource="{Binding}">
@@ -190,7 +207,10 @@ protected override void OnStartup(StartupEventArgs e)
   </ListView>
 ```
 
+- On lui donne un nom (`lvContacts`) parce qu'on en a besoin pour y accéder depuis le *code-behind*
 - En XAML, branchez l'événement `Loaded` du `UserControl` pour pouvoir y réagir dans le *code-behind*
+  - rappel : le *code-behind* est le fichier `.xaml.cs` associé à tout fichier `.xaml` définissant une UI
+  - on verra que l'utilisation de MVVM nous permettra de nous débarrasser de cette dépendance au *code-behind* pour charger les données
 - Le code à ajouter au *code-behind* :
 
 ```csharp
@@ -199,13 +219,24 @@ private void UserControl_Loaded(object sender, RoutedEventArgs e)
   ChargerContacts();
 }
 
-private void ChargerContacts()
+private void ChargerContact()
 {
   ContactsDbContext db;
+
+  // Récupération de la Connection String depuis App.config
+  string connString = ConfigurationManager.ConnectionStrings["Contacts"].ConnectionString;
+
+  // Création des options de connexion pour Entity Framework
+  var optionsBuilder = new DbContextOptionsBuilder<ContactsDbContext>();
+  optionsBuilder.UseSqlServer(connString);
+
   try
   {
-    db = new ContactsDbContext();
-    lvContacts.DataContext = db.Contacts.ToList();
+    // Connexion à la DB
+    db = new ContactsDbContext(optionsBuilder.Options);
+    
+    // Récupération des contacts et peuplement du contexte de données de la ListView
+    lvContacts.DataContext = db.Contacts.ToListAsync();
   }
   catch (Exception ex)
   {
@@ -214,13 +245,17 @@ private void ChargerContacts()
 }
 ```
 
-Ce code utilise Entity Framework pour récupérer les données depuis la table Contact. La méthode `ToList` permet ensuite de récupérer une liste générique qui peut être liée à une `ListView` WPF, par l'intermédiare de la propriété `DataContext`.
+Ce code utilise Entity Framework pour récupérer les données depuis la table *Contact*. La méthode `ToListAsync` permet ensuite de récupérer une liste générique C# classique qui peut alors être liée à une `ListView` WPF, par l'intermédiare de la propriété `DataContext`.
 
-Côté XAML, on a posé la propriété `ItemsSource` à `{Binding}`. Cela indique à `ListView` que les données seront liées dynamiquement à l'exécution (grâce au `DataContext`). Chaque enregistrement sera lié à une ligne de la liste dont le template est donné en XAML. Les attributs sont liés grâce à la propriété `DisplayMemberBinding`.
+Côté XAML, on a posé la propriété `ItemsSource` à `{Binding}`. Cela indique à `ListView` qu'elle sera nourrie dynamiquement à l'exécution (par son `DataContext`). Chaque enregistrement sera lié à une ligne de la liste dont le template est donné en XAML. Les attributs sont liés grâce à la propriété `DisplayMemberBinding`. Donc :
+- La `ListView` est liée à la liste C# par le `DataContext`
+- Chaque colonne de la `ListeView` est liée à une propriété des éléments de la liste C# sous-jacente (à savoir les propriétés exposées par `Contact` : `Nom`, `Email`...) par ce type de code XAML : `DisplayMemberBinding="{Binding Path=NomDeLaPropriétéDansLaClasseContact}"`
 
 ### MainWindow
 
 - Peuplons un minimum la `Grid` de la fenêtre principale pour lancer le tout :
+  - un `Menu`
+  - une zone de contenu dans laquelle on va venir « coller » notre *User Control* grâce au *code-behind* quand l'utilisateur va cliquer sur `Contacts`
 
 ```xml
 <Grid>
@@ -235,7 +270,7 @@ Côté XAML, on a posé la propriété `ItemsSource` à `{Binding}`. Cela indiqu
     <MenuItem Header="Contacts" Click="MenuContacts_Click" />
   </Menu>
   <Grid Grid.Row="1" Margin="10" HorizontalAlignment="Left"
-        VerticalAlignment="Top" Name="contentArea" />
+        VerticalAlignment="Top" Name="zoneDeContenu" />
 </Grid>
 ```
 
@@ -243,29 +278,33 @@ Côté XAML, on a posé la propriété `ItemsSource` à `{Binding}`. Cela indiqu
 
 ```csharp
 private void MenuFermer_Click(object sender, RoutedEventArgs e)
-  {
-    this.Close();
-  }
+{
+  this.Close();
+}
 
-  private void MenuContacts_Click(object sender, RoutedEventArgs e)
-  {
-    contentArea.Children.Add(new ListControl());
-  }
+private void MenuContacts_Click(object sender, RoutedEventArgs e)
+{
+  // Ajout d'un élément enfant à la zone de contenu pour afficher notre ListControl
+  zoneDeContenu.Children.Add(new ListControl());
+}
 ```
 
 ### Test
 
-- Lancez l'application. Un clic sur *Contacts* devrait afficher la `ListView` avec les contacts précédemment insérés.
+Lancez l'application. Un clic sur *Contacts* devrait afficher la `ListView` avec les contacts précédemment insérés.
 
 ## Refactoring MVVM
 
-Tel quelle, l'organisation du *binding* entre le modèle et la vue est déjà fonctionnelle puissante.
+Telle quelle, l'organisation du *binding* entre le modèle et la vue est déjà fonctionnelle.
 
-On va cependant la refactorer pour implémenter le pattern MVVM qui va permettre un découplement optimal entre la vue et le modèle, grâce à la couche intermédiaire, le *ViewModel*. Cela améliorera grandement le maintenabilité de l'application à travers le temps, et permettra de tester l'application automatiquement (ce qui serait très difficile en l'état). Cela va aussi permettre d'avoir une gestion complètement transparente et indépendante du flux des données.
+On va cependant la refactorer pour implémenter le pattern MVVM qui va permettre un découplement optimal entre la vue et le modèle, grâce à la couche intermédiaire, le *ViewModel*. Cela améliorera grandement le maintenabilité de l'application à travers le temps, et permettra de tester l'application automatiquement (ce qui serait très difficile en l'état).
+
+Et surtout, cela va aussi permettre d'avoir une gestion complètement transparente et indépendante du flux des données. Actuellement, si les données de la liste changent, la vue ne va pas automatiquement se mettre à jour (il faudra recharger la liste depuis le `DbContext` et réaffecter le `DataContext` de la `ListView` à chaque modification). Avec MVVM, la vue va « surveiller » toute modification du Model et cette mise à jour sera faite.
 
 ### ViewModelBase
 
 - Créez la classe `Common\ViewModelBase.cs` qui étend les possibilités de `Base` (notification automatique). Dans notre application, elle n'ajoute aucune fonctionnalité, mais c'est une bonne pratique d'ajouter cette couche d'abstraction supplémentaire pour anticiper les besoins futurs.
+- L'architecture étudiée par la suite va étendre quelque peu les fonctionnalités de cette classe.
 
 ```csharp
 /// <summary>
